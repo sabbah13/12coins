@@ -262,27 +262,38 @@
 
                 // Handle selection shelf specially
                 if (targetPosition === 'selection') {
+                    // If there's already a selected coin, put it back in available coins
+                    if (selectedCoin) {
+                        setCoins(prevCoins => [...prevCoins, { ...selectedCoin, position: 'available' }]);
+                    }
+                    
+                    // Set new selected coin and remove from game
                     setSelectedCoin(draggedCoin);
-                    // Remove from current position
                     setCoins(prevCoins => 
                         prevCoins.filter(coin => coin.id !== draggedCoin.id)
                     );
                 } else {
-                    // Don't move if dropping in same position
-                    if (draggedCoin.position === targetPosition) {
-                        setDraggedCoin(null);
-                        setDropTargets({ left: false, right: false, selection: false });
-                        return;
-                    }
+                    // Handle dragging from selection shelf back to game
+                    if (draggedCoin === selectedCoin) {
+                        setSelectedCoin(null);
+                        setCoins(prevCoins => [...prevCoins, { ...draggedCoin, position: targetPosition }]);
+                    } else {
+                        // Don't move if dropping in same position
+                        if (draggedCoin.position === targetPosition) {
+                            setDraggedCoin(null);
+                            setDropTargets({ left: false, right: false, selection: false });
+                            return;
+                        }
 
-                    // Normal position update
-                    setCoins(prevCoins => 
-                        prevCoins.map(coin => 
-                            coin.id === draggedCoin.id 
-                                ? { ...coin, position: targetPosition }
-                                : coin
-                        )
-                    );
+                        // Normal position update
+                        setCoins(prevCoins => 
+                            prevCoins.map(coin => 
+                                coin.id === draggedCoin.id 
+                                    ? { ...coin, position: targetPosition }
+                                    : coin
+                            )
+                        );
+                    }
                 }
 
                 setDraggedCoin(null);
@@ -340,6 +351,7 @@
                 setGameState('playing');
                 setScaleLocked(true);
                 setTurnPhase('setup');
+                setSelectedCoin(null);
                 
                 const randomFake = Math.floor(Math.random() * 12) + 1;
                 const randomWeight = Math.random() < 0.5 ? 'lighter' : 'heavier';
@@ -358,59 +370,12 @@
             };
 
             return (
-                <div className="min-h-screen p-8">
-                    <div className="max-w-6xl mx-auto">
-                        
+                <div className="min-h-screen flex">
+                    {/* Main Game Area */}
+                    <div className="flex-1 p-6 flex flex-col">
                         {/* Header */}
-                        <div className="text-center mb-8">
-                            <h1 className="text-4xl font-light text-gray-800 mb-3">12 Coins Logic Puzzle</h1>
-                            
-                            {/* Game Description */}
-                            <div className="max-w-4xl mx-auto mb-6">
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-4">
-                                    <h2 className="text-lg font-semibold text-blue-900 mb-3">🎯 Your Mission</h2>
-                                    <p className="text-blue-800 mb-3">
-                                        Among these 12 identical-looking coins, exactly <strong>one coin has a different weight</strong> 
-                                        (it could be either lighter or heavier than the others). Your challenge is to identify 
-                                        the fake coin using a precision balance scale in <strong>3 weighings or fewer</strong>.
-                                    </p>
-                                </div>
-                                
-                                {/* Rules */}
-                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-4">
-                                    <h3 className="text-md font-semibold text-gray-900 mb-3">📋 How the Scale Works</h3>
-                                    <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-700">
-                                        <div>
-                                            <h4 className="font-medium text-gray-900 mb-2">🔒 Setup Phase:</h4>
-                                            <ul className="space-y-1">
-                                                <li>• Red latch = Scale locked in neutral</li>
-                                                <li>• Drag coins onto left/right pans</li>
-                                                <li>• Arrange coins without seeing result</li>
-                                                <li>• Click "Release Latch" when ready</li>
-                                            </ul>
-                                        </div>
-                                        <div>
-                                            <h4 className="font-medium text-gray-900 mb-2">🔓 Measurement Phase:</h4>
-                                            <ul className="space-y-1">
-                                                <li>• Green latch = Scale shows true result</li>
-                                                <li>• Coins become locked (no interaction)</li>
-                                                <li>• Study the tilt direction carefully</li>
-                                                <li>• Click "Ready for Next Turn"</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                {/* Final Selection */}
-                                <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
-                                    <h3 className="text-md font-semibold text-purple-900 mb-2">🎲 Making Your Final Guess</h3>
-                                    <p className="text-purple-800 text-sm">
-                                        When you think you know which coin is fake, drag it to the purple 
-                                        <strong> Selection Shelf</strong> on the left, then click <strong>"This is the Fake Coin!"</strong>
-                                    </p>
-                                </div>
-                            </div>
-
+                        <div className="text-center mb-6">
+                            <h1 className="text-3xl font-light text-gray-800 mb-2">12 Coins Logic Puzzle</h1>
                             <div className="flex justify-center items-center space-x-6">
                                 <span className="text-lg text-gray-700">Weighings: <span className="font-semibold">{weighings}/3</span></span>
                                 <button 
@@ -436,59 +401,47 @@
                             </div>
                         )}
 
-                        {/* Main Game Area */}
-                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 mb-8">
-                            
-                            {/* Selection Shelf */}
-                            <div className="xl:col-span-3">
-                                <div className="bg-white rounded-2xl shadow-xl p-6">
-                                    <h3 className="text-center font-semibold text-purple-900 mb-4">🎲 Selection Shelf</h3>
-                                    <div 
-                                        className={`selection-shelf rounded-xl p-8 min-h-[200px] flex flex-col items-center justify-center coin-slot ${dropTargets.selection ? 'drop-target' : ''}`}
-                                        onDragOver={(e) => handleDragOver(e, 'selection')}
-                                        onDragLeave={(e) => handleDragLeave(e, 'selection')}
-                                        onDrop={(e) => handleDrop(e, 'selection')}
-                                    >
-                                        {selectedCoin ? (
-                                            <div className="text-center">
-                                                <div
-                                                    className="w-16 h-16 coin rounded-full border-2 border-yellow-600 flex items-center justify-center font-bold text-gray-800 shadow-lg mb-4 mx-auto"
-                                                    draggable={turnPhase !== 'measured'}
-                                                    onDragStart={(e) => handleDragStart(e, selectedCoin)}
-                                                >
-                                                    {selectedCoin.number}
-                                                </div>
-                                                <p className="text-white text-sm mb-4">Coin #{selectedCoin.number} Selected</p>
-                                                {weighings > 0 && (
-                                                    <button 
-                                                        onClick={selectFakeCoin}
-                                                        className="px-4 py-2 bg-yellow-500 text-black font-semibold rounded-lg hover:bg-yellow-400 transition-colors shadow-md"
-                                                    >
-                                                        This is the Fake Coin!
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center">
-                                                <div className="text-white text-opacity-70 mb-2">📥</div>
-                                                <p className="text-white text-opacity-90 text-sm">
-                                                    Drag your suspected<br/>fake coin here
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
+                        {/* Available Coins */}
+                        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                            <div 
+                                className="p-6 border-2 border-dashed border-gray-300 rounded-xl coin-slot"
+                                onDragOver={(e) => handleDragOver(e, 'available')}
+                                onDragLeave={(e) => handleDragLeave(e, 'available')}
+                                onDrop={(e) => handleDrop(e, 'available')}
+                            >
+                                <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-4 justify-items-center">
+                                    {coins.filter(coin => coin.position === 'available').map(coin => (
+                                        <div
+                                            key={coin.id}
+                                            className={`w-14 h-14 coin rounded-full border-2 border-yellow-600 flex items-center justify-center font-bold text-gray-800 shadow-lg hover:shadow-xl ${turnPhase === 'measured' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            draggable={turnPhase !== 'measured'}
+                                            onDragStart={(e) => handleDragStart(e, coin)}
+                                            onClick={() => null}
+                                        >
+                                            {coin.number}
+                                        </div>
+                                    ))}
                                 </div>
+                                
+                                {coins.filter(coin => coin.position === 'available').length === 0 && (
+                                    <div className="text-center text-gray-500 py-8">
+                                        <p>Drag coins back here to return them</p>
+                                    </div>
+                                )}
                             </div>
+                        </div>
 
+                        {/* Scale and Selection Area */}
+                        <div className="flex-1 grid grid-cols-12 gap-6">
                             {/* Balance Scale */}
-                            <div className="xl:col-span-9">
-                                <div className="bg-white rounded-2xl shadow-xl p-8">
+                            <div className="col-span-8">
+                                <div className="bg-white rounded-2xl shadow-xl p-8 h-full">
                                     <div className="flex justify-center items-center mb-8">
                                         <div className="relative">
                                             {/* Scale Base */}
                                             <div className="w-8 h-48 scale-base mx-auto rounded-t-lg shadow-lg relative">
-                                                {/* Latch Mechanism with Animation */}
-                                                <div className={`absolute -top-2 left-1/2 w-6 h-6 rounded-full shadow-md transition-all duration-300 ${scaleLocked ? 'bg-red-500' : 'bg-green-500'} ${latchAnimating ? (scaleLocked ? 'latch-engaging' : 'latch-releasing') : ''}`}>
+                                                {/* Latch Mechanism with Fixed Animation */}
+                                                <div className={`absolute -top-2 left-1/2 transform -translate-x-1/2 w-6 h-6 rounded-full shadow-md transition-all duration-300 ${scaleLocked ? 'bg-red-500' : 'bg-green-500'} ${latchAnimating ? (scaleLocked ? 'latch-engaging' : 'latch-releasing') : ''}`}>
                                                     <div className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full ${scaleLocked ? 'bg-red-700' : 'bg-green-700'}`}></div>
                                                 </div>
                                             </div>
@@ -588,41 +541,124 @@
                                     </div>
                                 )}
                             </div>
-                        </div>
-                    </div>
-                </div>
-                        
-                {/* Available Coins */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 mt-8">
-                    <div 
-                        className="p-6 border-2 border-dashed border-gray-300 rounded-xl coin-slot"
-                        onDragOver={(e) => handleDragOver(e, 'available')}
-                        onDragLeave={(e) => handleDragLeave(e, 'available')}
-                        onDrop={(e) => handleDrop(e, 'available')}
-                    >
-                        <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-4 justify-items-center">
-                            {coins.filter(coin => coin.position === 'available').map(coin => (
-                                <div
-                                    key={coin.id}
-                                    className={`w-14 h-14 coin rounded-full border-2 border-yellow-600 flex items-center justify-center font-bold text-gray-800 shadow-lg hover:shadow-xl ${turnPhase === 'measured' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    draggable={turnPhase !== 'measured'}
-                                    onDragStart={(e) => handleDragStart(e, coin)}
-                                    onClick={() => null}
-                                >
-                                    {coin.number}
-                                </div>
-                            ))}
-                        </div>
-                        
-                        {coins.filter(coin => coin.position === 'available').length === 0 && (
-                            <div className="text-center text-gray-500 py-8">
-                                <p>Drag coins back here to return them</p>
                             </div>
-                        )}
+                        </div>
+
+                        {/* Selection Shelf */}
+                        <div className="col-span-4">
+                            <div className="bg-white rounded-2xl shadow-xl p-6 h-full">
+                                <h3 className="text-center font-semibold text-purple-900 mb-4">🎯 Final Guess</h3>
+                                <div 
+                                    className={`selection-shelf rounded-xl p-8 min-h-[200px] flex flex-col items-center justify-center coin-slot ${dropTargets.selection ? 'drop-target' : ''}`}
+                                    onDragOver={(e) => handleDragOver(e, 'selection')}
+                                    onDragLeave={(e) => handleDragLeave(e, 'selection')}
+                                    onDrop={(e) => handleDrop(e, 'selection')}
+                                >
+                                    {selectedCoin ? (
+                                        <div className="text-center">
+                                            <div
+                                                className="w-16 h-16 coin rounded-full border-2 border-yellow-600 flex items-center justify-center font-bold text-gray-800 shadow-lg mb-4 mx-auto"
+                                                draggable={turnPhase !== 'measured'}
+                                                onDragStart={(e) => handleDragStart(e, selectedCoin)}
+                                            >
+                                                {selectedCoin.number}
+                                            </div>
+                                            <p className="text-white text-sm mb-4">Coin #{selectedCoin.number}</p>
+                                            {weighings > 0 && (
+                                                <button 
+                                                    onClick={selectFakeCoin}
+                                                    className="px-4 py-2 bg-yellow-500 text-black font-semibold rounded-lg hover:bg-yellow-400 transition-colors shadow-md"
+                                                >
+                                                    Submit as Fake
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center">
+                                            <div className="text-white text-opacity-70 mb-2 text-2xl">🎲</div>
+                                            <p className="text-white text-opacity-90 text-sm">
+                                                Drag suspected<br/>fake coin here
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                {/* Right Sidebar */}
+                <div className="w-80 bg-gray-100 p-6 overflow-y-auto">
+                    <div className="space-y-6">
+                        {/* Mission */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <h2 className="text-lg font-semibold text-blue-900 mb-3">🎯 Your Mission</h2>
+                            <p className="text-blue-800 text-sm">
+                                Among these 12 coins, exactly <strong>one has a different weight</strong> 
+                                (lighter or heavier). Find it in <strong>3 weighings or fewer</strong>.
+                            </p>
+                        </div>
+                        
+                        {/* Scale Instructions */}
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <h3 className="text-md font-semibold text-gray-900 mb-3">📋 How to Use Scale</h3>
+                            <div className="space-y-3 text-sm text-gray-700">
+                                <div>
+                                    <h4 className="font-medium text-gray-900 mb-1">🔒 Setup Phase:</h4>
+                                    <ul className="space-y-1 text-xs">
+                                        <li>• Red latch = Scale locked</li>
+                                        <li>• Drag coins to left/right pans</li>
+                                        <li>• Arrange without seeing result</li>
+                                        <li>• Click "Release Latch" when ready</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h4 className="font-medium text-gray-900 mb-1">🔓 Measurement Phase:</h4>
+                                    <ul className="space-y-1 text-xs">
+                                        <li>• Green latch = Scale shows result</li>
+                                        <li>• Coins locked (no interaction)</li>
+                                        <li>• Study tilt direction</li>
+                                        <li>• Click "Ready for Next Turn"</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Final Selection */}
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                            <h3 className="text-md font-semibold text-purple-900 mb-2">🎲 Final Selection</h3>
+                            <p className="text-purple-800 text-sm">
+                                When ready, drag your suspected fake coin to the purple shelf 
+                                and click <strong>"Submit as Fake"</strong>. You can move it freely 
+                                until you submit.
+                            </p>
+                        </div>
+
+                        {/* Game Status */}
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <h3 className="text-md font-semibold text-gray-900 mb-2">📊 Game Status</h3>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span>Weighings used:</span>
+                                    <span className="font-semibold">{weighings}/3</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Phase:</span>
+                                    <span className={`font-semibold ${turnPhase === 'setup' ? 'text-red-600' : 'text-green-600'}`}>
+                                        {turnPhase === 'setup' ? 'Setup' : 'Measured'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Scale:</span>
+                                    <span className={`font-semibold ${scaleLocked ? 'text-red-600' : 'text-green-600'}`}>
+                                        {scaleLocked ? 'Locked' : 'Active'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+            </div>
             );
         };
 
