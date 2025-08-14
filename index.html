@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>12 Coins Challenge</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            user-select: none;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        
+        .coin {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: grab;
+        }
+        
+        .coin:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+            z-index: 1000;
+        }
+        
+        .coin.dragging {
+            z-index: 1000;
+            transform: rotate(3deg) scale(1.1);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+        }
+        
+        .scale-pan {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .scale-beam {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .coin-slot {
+            transition: all 0.2s ease;
+        }
+        
+        .coin-slot.drop-target {
+            background-color: rgba(99, 102, 241, 0.1);
+            border-color: #6366f1;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+        
+        @keyframes coinDrop {
+            0% { transform: translateY(-8px) rotate(0deg); opacity: 0.8; }
+            50% { transform: translateY(3px) rotate(180deg); opacity: 1; }
+            100% { transform: translateY(0) rotate(360deg); opacity: 1; }
+        }
+        
+        .coin-dropping {
+            animation: coinDrop 0.4s ease-out;
+        }
+        
+        @keyframes scaleOscillate {
+            0%, 100% { transform: translateX(-50%) rotate(var(--rotation, 0deg)); }
+            25% { transform: translateX(-50%) rotate(calc(var(--rotation, 0deg) + 1deg)); }
+            75% { transform: translateX(-50%) rotate(calc(var(--rotation, 0deg) - 1deg)); }
+        }
+        
+        .scale-oscillating {
+            animation: scaleOscillate 1s ease-in-out;
+        }
+
+        .scale-base {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+        }
+
+        .scale-beam {
+            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+        }
+
+        .coin {
+            background: linear-gradient(135deg, #f6ad55 0%, #ed8936 50%, #d69e2e 100%);
+            box-shadow: 
+                inset 0 1px 3px rgba(255, 255, 255, 0.3),
+                0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .scale-pan {
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+            border: 2px solid #a0aec0;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        const CoinGame = () => {
+            const [weighings, setWeighings] = useState(0);
+            const [coins, setCoins] = useState([]);
+            const [fakeCoin, setFakeCoin] = useState(null);
+            const [fakeWeight, setFakeWeight] = useState(null);
+            const [scaleRotation, setScaleRotation] = useState(0);
+            const [isOscillating, setIsOscillating] = useState(false);
+            const [draggedCoin, setDraggedCoin] = useState(null);
+            const [dropTargets, setDropTargets] = useState({ left: false, right: false });
+            const [gameState, setGameState] = useState('playing');
+            
+            const scaleRef = useRef(null);
+
+            // Initialize 12 individual coins with positions
+            useEffect(() => {
+                const initialCoins = Array.from({length: 12}, (_, i) => ({
+                    id: i + 1,
+                    number: i + 1,
+                    position: 'available' // 'available', 'left', 'right'
+                }));
+                setCoins(initialCoins);
+                
+                const randomFake = Math.floor(Math.random() * 12) + 1;
+                const randomWeight = Math.random() < 0.5 ? 'lighter' : 'heavier';
+                setFakeCoin(randomFake);
+                setFakeWeight(randomWeight);
+            }, []);
+
+            // Real-time physics calculation using React hooks - no setTimeout delays!
+            const calculateScalePhysics = useCallback(() => {
+                if (!fakeCoin || !fakeWeight) return; // Wait for game initialization
+                
+                // Filter coins directly from current state
+                const leftCoins = coins.filter(coin => coin.position === 'left');
+                const rightCoins = coins.filter(coin => coin.position === 'right');
+                
+                // Calculate accurate weights including fake coin physics
+                const leftWeight = leftCoins.reduce((sum, coin) => {
+                    if (coin.number === fakeCoin) {
+                        return sum + (fakeWeight === 'lighter' ? 0.9 : 1.1);
+                    }
+                    return sum + 1;
+                }, 0);
+
+                const rightWeight = rightCoins.reduce((sum, coin) => {
+                    if (coin.number === fakeCoin) {
+                        return sum + (fakeWeight === 'lighter' ? 0.9 : 1.1);
+                    }
+                    return sum + 1;
+                }, 0);
+
+                // Real balance scale physics: binary tilt based on weight difference
+                const weightDiff = leftWeight - rightWeight;
+                const maxTilt = 25; // Full tilt angle
+                
+                let rotation = 0;
+                if (weightDiff > 0.01) {
+                    // Left side heavier - tilt left down (negative rotation)
+                    rotation = -maxTilt;
+                } else if (weightDiff < -0.01) {
+                    // Right side heavier - tilt right down (positive rotation)
+                    rotation = maxTilt;
+                } else {
+                    // Perfectly balanced
+                    rotation = 0;
+                }
+                
+                setScaleRotation(rotation);
+                
+                // Visual feedback with oscillation
+                setIsOscillating(true);
+                setTimeout(() => setIsOscillating(false), 1000);
+
+                return { leftWeight, rightWeight, rotation };
+            }, [coins, fakeCoin, fakeWeight]);
+
+            // Reactive physics: automatically update when coins change position
+            useEffect(() => {
+                calculateScalePhysics();
+            }, [calculateScalePhysics]);
+
+            // Handle drag start
+            const handleDragStart = (e, coin) => {
+                setDraggedCoin(coin);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', '');
+                
+                setTimeout(() => {
+                    if (e.target) {
+                        e.target.classList.add('dragging');
+                    }
+                }, 0);
+            };
+
+            // Handle drag over
+            const handleDragOver = (e, target) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                
+                setDropTargets(prev => ({
+                    ...prev,
+                    [target]: true
+                }));
+            };
+
+            // Handle drag leave
+            const handleDragLeave = (e, target) => {
+                setDropTargets(prev => ({
+                    ...prev,
+                    [target]: false
+                }));
+            };
+
+            // Handle drop with immediate physics
+            const handleDrop = (e, targetPosition) => {
+                e.preventDefault();
+                if (!draggedCoin) return;
+
+                // Remove dragging effect
+                document.querySelectorAll('.coin').forEach(coin => {
+                    coin.classList.remove('dragging');
+                });
+
+                // Don't move if dropping in same position
+                if (draggedCoin.position === targetPosition) {
+                    setDraggedCoin(null);
+                    setDropTargets({ left: false, right: false });
+                    return;
+                }
+
+                // Update coin position
+                setCoins(prevCoins => 
+                    prevCoins.map(coin => 
+                        coin.id === draggedCoin.id 
+                            ? { ...coin, position: targetPosition }
+                            : coin
+                    )
+                );
+
+                setDraggedCoin(null);
+                setDropTargets({ left: false, right: false });
+
+                // Physics will be calculated automatically by useEffect when coins state changes!
+            };
+
+            // Record an official weighing
+            const performWeighing = () => {
+                const leftCoins = coins.filter(coin => coin.position === 'left');
+                const rightCoins = coins.filter(coin => coin.position === 'right');
+                if (leftCoins.length === 0 && rightCoins.length === 0) {
+                    return;
+                }
+                setWeighings(prev => prev + 1);
+            };
+
+            const clearScale = () => {
+                setCoins(prevCoins => 
+                    prevCoins.map(coin => 
+                        coin.position === 'left' || coin.position === 'right'
+                            ? { ...coin, position: 'available' }
+                            : coin
+                    )
+                );
+                setScaleRotation(0);
+            };
+
+            const resetGame = () => {
+                const initialCoins = Array.from({length: 12}, (_, i) => ({
+                    id: i + 1,
+                    number: i + 1,
+                    position: 'available'
+                }));
+                setCoins(initialCoins);
+                setWeighings(0);
+                setScaleRotation(0);
+                setGameState('playing');
+                
+                const randomFake = Math.floor(Math.random() * 12) + 1;
+                const randomWeight = Math.random() < 0.5 ? 'lighter' : 'heavier';
+                setFakeCoin(randomFake);
+                setFakeWeight(randomWeight);
+            };
+
+            const selectFakeCoin = (coinNumber) => {
+                if (weighings === 0) return;
+
+                if (coinNumber === fakeCoin) {
+                    setGameState('won');
+                } else {
+                    setGameState('lost');
+                }
+            };
+
+            return (
+                <div className="min-h-screen p-8">
+                    <div className="max-w-6xl mx-auto">
+                        
+                        {/* Header */}
+                        <div className="text-center mb-8">
+                            <h1 className="text-4xl font-light text-gray-800 mb-2">12 Coins</h1>
+                            <p className="text-gray-600">One coin has a different weight. Find it in 3 weighings or fewer.</p>
+                            <div className="mt-4 flex justify-center items-center space-x-6">
+                                <span className="text-lg text-gray-700">Weighings: <span className="font-semibold">{weighings}/3</span></span>
+                                <button 
+                                    onClick={resetGame}
+                                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                                >
+                                    New Game
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Game Result */}
+                        {(gameState === 'won' || gameState === 'lost') && (
+                            <div className="text-center mb-8">
+                                <div className={`inline-block px-8 py-4 rounded-lg ${gameState === 'won' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                    <h2 className="text-xl font-semibold mb-1">
+                                        {gameState === 'won' ? 'Correct!' : 'Incorrect'}
+                                    </h2>
+                                    <p>
+                                        The different coin was #{fakeCoin} ({fakeWeight})
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Balance Scale */}
+                        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+                            <div className="flex justify-center items-center mb-8">
+                                <div className="relative">
+                                    {/* Scale Base */}
+                                    <div className="w-8 h-48 scale-base mx-auto rounded-t-lg shadow-lg"></div>
+                                    
+                                    {/* Scale Beam */}
+                                    <div 
+                                        ref={scaleRef}
+                                        className={`absolute top-16 left-1/2 w-[30rem] h-4 scale-beam rounded-full shadow-md ${isOscillating ? 'scale-oscillating' : ''}`}
+                                        style={{ 
+                                            transform: `translateX(-50%) rotate(${scaleRotation}deg)`,
+                                            '--rotation': `${scaleRotation}deg`
+                                        }}
+                                    >
+                                        {/* Left Pan */}
+                                        <div 
+                                            className={`absolute -left-24 -top-12 w-48 h-24 scale-pan rounded-xl coin-slot shadow-lg ${dropTargets.left ? 'drop-target' : ''}`}
+                                            onDragOver={(e) => handleDragOver(e, 'left')}
+                                            onDragLeave={(e) => handleDragLeave(e, 'left')}
+                                            onDrop={(e) => handleDrop(e, 'left')}
+                                        >
+                                            <div className="flex flex-wrap items-center justify-center h-full p-3 gap-2">
+                                                {coins.filter(coin => coin.position === 'left').map((coin) => (
+                                                    <div
+                                                        key={`left-${coin.id}`}
+                                                        className="w-10 h-10 coin rounded-full text-sm flex items-center justify-center font-bold text-gray-800 coin-dropping shadow-lg border border-yellow-600"
+                                                        draggable
+                                                        onDragStart={(e) => handleDragStart(e, coin)}
+                                                    >
+                                                        {coin.number}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Right Pan */}
+                                        <div 
+                                            className={`absolute -right-24 -top-12 w-48 h-24 scale-pan rounded-xl coin-slot shadow-lg ${dropTargets.right ? 'drop-target' : ''}`}
+                                            onDragOver={(e) => handleDragOver(e, 'right')}
+                                            onDragLeave={(e) => handleDragLeave(e, 'right')}
+                                            onDrop={(e) => handleDrop(e, 'right')}
+                                        >
+                                            <div className="flex flex-wrap items-center justify-center h-full p-3 gap-2">
+                                                {coins.filter(coin => coin.position === 'right').map((coin) => (
+                                                    <div
+                                                        key={`right-${coin.id}`}
+                                                        className="w-10 h-10 coin rounded-full text-sm flex items-center justify-center font-bold text-gray-800 coin-dropping shadow-lg border border-yellow-600"
+                                                        draggable
+                                                        onDragStart={(e) => handleDragStart(e, coin)}
+                                                    >
+                                                        {coin.number}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Scale Fulcrum */}
+                                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-gray-800 rounded-full shadow-md"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-center space-x-4">
+                                <button 
+                                    onClick={performWeighing}
+                                    disabled={coins.filter(coin => coin.position === 'left').length === 0 && coins.filter(coin => coin.position === 'right').length === 0}
+                                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors shadow-md"
+                                >
+                                    Record Weighing
+                                </button>
+                                <button 
+                                    onClick={clearScale}
+                                    className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-md"
+                                >
+                                    Clear Scale
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Available Coins */}
+                        <div className="bg-white rounded-2xl shadow-xl p-6">
+                            <div 
+                                className="p-6 border-2 border-dashed border-gray-300 rounded-xl coin-slot"
+                                onDragOver={(e) => handleDragOver(e, 'available')}
+                                onDragLeave={(e) => handleDragLeave(e, 'available')}
+                                onDrop={(e) => handleDrop(e, 'available')}
+                            >
+                                <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-4 justify-items-center">
+                                    {coins.filter(coin => coin.position === 'available').map(coin => (
+                                        <div
+                                            key={coin.id}
+                                            className="w-14 h-14 coin rounded-full border-2 border-yellow-600 flex items-center justify-center font-bold text-gray-800 shadow-lg hover:shadow-xl"
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, coin)}
+                                            onClick={() => gameState === 'playing' && weighings > 0 ? selectFakeCoin(coin.number) : null}
+                                        >
+                                            {coin.number}
+                                        </div>
+                                    ))}
+                                </div>
+                                
+                                {coins.filter(coin => coin.position === 'available').length === 0 && (
+                                    <div className="text-center text-gray-500 py-8">
+                                        <p>Drag coins back here to return them</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {weighings > 0 && coins.filter(coin => coin.position === 'available').length > 0 && (
+                                <div className="mt-6 pt-4 border-t border-gray-200">
+                                    <p className="text-center text-gray-600 text-sm mb-3">Click the coin you believe is different:</p>
+                                    <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 justify-items-center">
+                                        {Array.from({length: 12}, (_, i) => i + 1).map(coinNumber => (
+                                            <button
+                                                key={`guess-${coinNumber}`}
+                                                onClick={() => selectFakeCoin(coinNumber)}
+                                                className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 rounded-full flex items-center justify-center font-semibold text-white transition-all hover:scale-105 shadow-md"
+                                            >
+                                                {coinNumber}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<CoinGame />, document.getElementById('root'));
+    </script>
+</body>
+</html>
