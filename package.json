@@ -1,0 +1,30 @@
+{
+  "name": "12coins",
+  "version": "1.0.0",
+  "description": "🪙 Interactive 12 Coins Logic Puzzle - Find the fake coin in 3 weighings using realistic physics simulation and modern UI",
+  "main": "index.html",
+  "scripts": {
+    "start": "open index.html",
+    "dev": "open index.html"
+  },
+  "keywords": [
+    "puzzle",
+    "logic",
+    "game",
+    "12-coins",
+    "balance-scale",
+    "react",
+    "tailwind",
+    "interactive"
+  ],
+  "author": "sabbah13",
+  "license": "MIT",
+  "homepage": "https://12coins.netlify.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sabbah13/12coins.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sabbah13/12coins/issues"
+  }
+}
